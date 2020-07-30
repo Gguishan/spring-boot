@@ -163,6 +163,8 @@ public class SpringApplication {
 	/**
 	 * The class name of application context that will be used by default for non-web
 	 * environments.
+	 *
+	 * non-web环境
 	 */
 	public static final String DEFAULT_CONTEXT_CLASS = "org.springframework.context."
 			+ "annotation.AnnotationConfigApplicationContext";
@@ -170,6 +172,8 @@ public class SpringApplication {
 	/**
 	 * The class name of application context that will be used by default for web
 	 * environments.
+	 *
+	 * web环境
 	 */
 	public static final String DEFAULT_SERVLET_WEB_CONTEXT_CLASS = "org.springframework.boot."
 			+ "web.servlet.context.AnnotationConfigServletWebServerApplicationContext";
@@ -177,6 +181,8 @@ public class SpringApplication {
 	/**
 	 * The class name of application context that will be used by default for reactive web
 	 * environments.
+	 *
+	 * 反应式web环境
 	 */
 	public static final String DEFAULT_REACTIVE_WEB_CONTEXT_CLASS = "org.springframework."
 			+ "boot.web.reactive.context.AnnotationConfigReactiveWebServerApplicationContext";
@@ -265,17 +271,28 @@ public class SpringApplication {
 	 */
 	@SuppressWarnings({ "unchecked", "rawtypes" })
 	public SpringApplication(ResourceLoader resourceLoader, Class<?>... primarySources) {
+		// 设置资源加载器为null
 		this.resourceLoader = resourceLoader;
+		// 断言加载资源类不能为null
 		Assert.notNull(primarySources, "PrimarySources must not be null");
+		// 将primarySources数组转换为List，最后放到LinkedHashSet集合中
 		this.primarySources = new LinkedHashSet<>(Arrays.asList(primarySources));
+		// 1.1 推断 Web 应用类型 - 根据classpath下的内容推断当前应用类型是否为WEB
 		this.webApplicationType = WebApplicationType.deduceFromClasspath();
+		// 1.2 加载 Spring 应用上下文初始化器 - 设置应用上下文初始化器
 		setInitializers((Collection) getSpringFactoriesInstances(ApplicationContextInitializer.class));
+		// 1.3 加载 Spring 应用事件监听器 - 设置监听器
 		setListeners((Collection) getSpringFactoriesInstances(ApplicationListener.class));
+		// 1.4 推导应用引导类(main方法), 该方法根据当前线程执行栈来判断栈中哪个类包含main方法
 		this.mainApplicationClass = deduceMainApplicationClass();
 	}
 
 	private Class<?> deduceMainApplicationClass() {
 		try {
+			/**
+			 * 构造一个运行时异常，遍历异常栈中的方法名
+			 * 获取方法名为main的栈帧，得到入口类的名字再返回该类
+			 */
 			StackTraceElement[] stackTrace = new RuntimeException().getStackTrace();
 			for (StackTraceElement stackTraceElement : stackTrace) {
 				if ("main".equals(stackTraceElement.getMethodName())) {
@@ -296,29 +313,50 @@ public class SpringApplication {
 	 * @return a running {@link ApplicationContext}
 	 */
 	public ConfigurableApplicationContext run(String... args) {
+		// 设置计时器
 		StopWatch stopWatch = new StopWatch();
 		stopWatch.start();
 		ConfigurableApplicationContext context = null;
 		Collection<SpringBootExceptionReporter> exceptionReporters = new ArrayList<>();
+		// 设置headless属性
 		configureHeadlessProperty();
+		// 创建运行监听器
 		SpringApplicationRunListeners listeners = getRunListeners(args);
 		listeners.starting();
 		try {
+			// 初始化默认应用参数类
 			ApplicationArguments applicationArguments = new DefaultApplicationArguments(args);
+			/**
+			 * 根据监听器和应用参数类准备Spring环境
+			 */
 			ConfigurableEnvironment environment = prepareEnvironment(listeners, applicationArguments);
 			configureIgnoreBeanInfo(environment);
 			Banner printedBanner = printBanner(environment);
+			/**
+			 * 创建应用上下文 - 根据推断的Web应用类型类型【webApplicationType】创建应用上下文
+			 */
 			context = createApplicationContext();
 			exceptionReporters = getSpringFactoriesInstances(SpringBootExceptionReporter.class,
 					new Class[] { ConfigurableApplicationContext.class }, context);
+			/**
+			 * 准备应用上下文
+			 */
 			prepareContext(context, environment, listeners, applicationArguments, printedBanner);
+			/**
+			 * 刷新应用上下文
+			 */
 			refreshContext(context);
+			// 应用上下文后置处理刷新
 			afterRefresh(context, applicationArguments);
 			stopWatch.stop();
+			// 输出日志记录执行主类名、时间信息
 			if (this.logStartupInfo) {
 				new StartupInfoLogger(this.mainApplicationClass).logStarted(getApplicationLog(), stopWatch);
 			}
 			listeners.started(context);
+			/**
+			 * 执行Runner运行器
+			 */
 			callRunners(context, applicationArguments);
 		}
 		catch (Throwable ex) {
@@ -327,6 +365,7 @@ public class SpringApplication {
 		}
 
 		try {
+			// 发布应用上下文就绪事件
 			listeners.running(context);
 		}
 		catch (Throwable ex) {
@@ -336,10 +375,18 @@ public class SpringApplication {
 		return context;
 	}
 
+	/**
+	 * 根据监听器和应用参数类准备Spring环境
+	 * @param listeners
+	 * @param applicationArguments
+	 * @return
+	 */
 	private ConfigurableEnvironment prepareEnvironment(SpringApplicationRunListeners listeners,
 			ApplicationArguments applicationArguments) {
 		// Create and configure the environment
+		// 获取应用环境(3种情况: non-web, web, reactive web)
 		ConfigurableEnvironment environment = getOrCreateEnvironment();
+		// 配置应用环境
 		configureEnvironment(environment, applicationArguments.getSourceArgs());
 		ConfigurationPropertySources.attach(environment);
 		listeners.environmentPrepared(environment);
@@ -365,15 +412,21 @@ public class SpringApplication {
 
 	private void prepareContext(ConfigurableApplicationContext context, ConfigurableEnvironment environment,
 			SpringApplicationRunListeners listeners, ApplicationArguments applicationArguments, Banner printedBanner) {
+		// 绑定环境到上下文
 		context.setEnvironment(environment);
+		// 配置上下文的bean生成器和资源加载器
 		postProcessApplicationContext(context);
+		// 为上下文采用所有初始化器
 		applyInitializers(context);
+		// 触发监听器的contextPrepared事件
 		listeners.contextPrepared(context);
+		// 记录启动日志
 		if (this.logStartupInfo) {
 			logStartupInfo(context.getParent() == null);
 			logStartupProfileInfo(context);
 		}
 		// Add boot specific singleton beans
+		// 注册两个特殊的单例Bean
 		ConfigurableListableBeanFactory beanFactory = context.getBeanFactory();
 		beanFactory.registerSingleton("springApplicationArguments", applicationArguments);
 		if (printedBanner != null) {
@@ -387,13 +440,16 @@ public class SpringApplication {
 			context.addBeanFactoryPostProcessor(new LazyInitializationBeanFactoryPostProcessor());
 		}
 		// Load the sources
+		// 加载所有资源
 		Set<Object> sources = getAllSources();
 		Assert.notEmpty(sources, "Sources must not be empty");
 		load(context, sources.toArray(new Object[0]));
+		// 触发监听器的contextLoaded事件
 		listeners.contextLoaded(context);
 	}
 
 	private void refreshContext(ConfigurableApplicationContext context) {
+		// 调用org.springframework.context.ConfigurableApplicationContext的refresh方法刷新上下文
 		refresh((ApplicationContext) context);
 		if (this.registerShutdownHook) {
 			try {
@@ -421,9 +477,13 @@ public class SpringApplication {
 	}
 
 	private <T> Collection<T> getSpringFactoriesInstances(Class<T> type, Class<?>[] parameterTypes, Object... args) {
+		// 获取当前上下文类加载器
 		ClassLoader classLoader = getClassLoader();
 		// Use names and ensure unique to protect against duplicates
+		// 根据META-INF/spring.factories文件中的配置，获取ApplicationContextInitializer实例名称并且去重
 		Set<String> names = new LinkedHashSet<>(SpringFactoriesLoader.loadFactoryNames(type, classLoader));
+		logger.debug("org.springframework.boot.SpringApplication.getSpringFactoriesInstances => " + names);
+		// 创建并初始化实例
 		List<T> instances = createSpringFactoriesInstances(type, parameterTypes, classLoader, args, names);
 		AnnotationAwareOrderComparator.sort(instances);
 		return instances;
@@ -448,6 +508,11 @@ public class SpringApplication {
 		return instances;
 	}
 
+	/**
+	 * 获取应用环境(3种情况)
+	 *
+	 * @return
+	 */
 	private ConfigurableEnvironment getOrCreateEnvironment() {
 		if (this.environment != null) {
 			return this.environment;
@@ -766,11 +831,18 @@ public class SpringApplication {
 	protected void afterRefresh(ConfigurableApplicationContext context, ApplicationArguments args) {
 	}
 
+	/**
+	 * 执行所有ApplicationRunner和CommandLineRunner两种运行器
+	 *
+	 * @param context
+	 * @param args
+	 */
 	private void callRunners(ApplicationContext context, ApplicationArguments args) {
 		List<Object> runners = new ArrayList<>();
 		runners.addAll(context.getBeansOfType(ApplicationRunner.class).values());
 		runners.addAll(context.getBeansOfType(CommandLineRunner.class).values());
 		AnnotationAwareOrderComparator.sort(runners);
+		// 启动所有的运行器
 		for (Object runner : new LinkedHashSet<>(runners)) {
 			if (runner instanceof ApplicationRunner) {
 				callRunner((ApplicationRunner) runner, args);
