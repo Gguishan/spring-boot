@@ -21,6 +21,8 @@ import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.core.io.support.SpringFactoriesLoader;
 
 /**
+ * 回调接口， 用于支持启动错误的自定义报告
+ *
  * Callback interface used to support custom reporting of {@link SpringApplication}
  * startup errors. {@link SpringBootExceptionReporter reporters} are loaded via the
  * {@link SpringFactoriesLoader} and must declare a public constructor with a single
